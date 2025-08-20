@@ -91,6 +91,40 @@ jobs:
           ls -la /toolkit/
           ls -la /toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/
 
+      - name: Download Synology GPL kernel source and toolchain
+        run: |
+          # DSM 버전에 맞는 Synology 아카이브에서 GPL 소스와 툴체인 다운로드
+          case "${{ matrix.dsm }}" in
+            "7.0")
+              BUILD_NUM="41890"
+              ;;
+            "7.1") 
+              BUILD_NUM="42962"
+              ;;
+            "7.2")
+              BUILD_NUM="72806"
+              ;;
+          esac
+          
+          # 플랫폼별 커널 버전 매핑
+          case "${{ matrix.arch }}" in
+            "kvmx64")
+              KERNEL_VER="4.4.x"
+              ;;
+            *)
+              KERNEL_VER="4.4.x"
+              ;;
+          esac
+          
+          # GPL 커널 소스 다운로드
+          cd /tmp
+          wget "https://global.download.synology.com/download/ToolChain/Synology%20NAS%20GPL%20Source/${{ matrix.dsm }}-${BUILD_NUM}/${{ matrix.arch }}/linux-${KERNEL_VER}.txz"
+          
+          # chroot 환경에 커널 소스 배치
+          sudo mkdir -p "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/kernel"
+          sudo tar -xf "linux-${KERNEL_VER}.txz" -C "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/kernel" --strip-components=1
+
+
       - name: Cache NVIDIA open-source kernel modules
         uses: actions/cache@v4
         id: cache-nvidia-modules
