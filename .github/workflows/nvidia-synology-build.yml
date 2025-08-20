@@ -145,7 +145,9 @@ jobs:
       - name: Create NVIDIA package source structure
         run: |
           # INFO.sh 생성
-          sudo tee INFO.sh << 'EOF'
+          cd /toolkit/source/nvidia-driver
+
+          sudo tee /toolkit/source/nvidia-driver/INFO.sh << 'EOF'          
           #!/bin/bash
           source /pkgscripts/include/pkg_util.sh
           
@@ -161,7 +163,7 @@ jobs:
           pkg_dump_info
           EOF
           
-          sudo chmod +x INFO.sh
+          sudo chmod +x /toolkit/source/nvidia-driver/INFO.sh
           
       - name: Create SynoBuildConf directory and scripts
         run: |
@@ -311,8 +313,7 @@ jobs:
               cp -av PACKAGE_ICON*.PNG $PKG_DIR/ 2>/dev/null || true
               
               # INFO 파일 생성
-              ./INFO.sh > INFO
-              cp INFO $PKG_DIR/INFO
+              /source/nvidia-driver/INFO.sh > "$PKG_DIR/INFO"
               
               # 패키지 스크립트들 생성
               
