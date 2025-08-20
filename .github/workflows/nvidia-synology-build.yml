@@ -289,6 +289,9 @@ jobs:
           find . -name "*.ko" -type f
           
           EOF
+
+      - name: Create Install Script
+        run: |
           
           # install 스크립트 생성 - .spk 패키지 생성
           sudo tee SynoBuildConf/install << 'EOF'
