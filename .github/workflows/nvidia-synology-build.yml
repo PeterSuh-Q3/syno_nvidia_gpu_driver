@@ -48,8 +48,24 @@ jobs:
             cifs-utils \
             kmod \
             libc6-i386
-            
+
+      # 캐시 복원/저장
+      - name: Cache Synology toolkit and build environment
+        uses: actions/cache@v4
+        id: cache-synology-env
+        with:
+          path: |
+            /toolkit/pkgscripts-ng
+            /toolkit/build_env
+            /toolkit/toolkit_tarballs
+          key: synology-toolkit-${{ matrix.dsm }}-${{ matrix.arch }}-${{ hashFiles('.github/workflows/*.yml') }}
+          restore-keys: |
+            synology-toolkit-${{ matrix.dsm }}-${{ matrix.arch }}-
+            synology-toolkit-${{ matrix.dsm }}-
+
+      # 캐시 미스 시에만 실행
       - name: Create toolkit directory structure
+        if: steps.cache-synology-env.outputs.cache-hit != 'true'
         run: |
           sudo mkdir -p /toolkit
           cd /toolkit
@@ -58,9 +74,22 @@ jobs:
           sudo git checkout DSM${{ matrix.dsm }}
           
       - name: Deploy Synology build environment
+        if: steps.cache-synology-env.outputs.cache-hit != 'true'
         run: |
           cd /toolkit/pkgscripts-ng
           sudo ./EnvDeploy -v ${{ matrix.dsm }} -p ${{ matrix.arch }}
+
+      # 캐시 적중 확인
+      - name: Verify build environment
+        run: |
+          echo "Build environment status:"
+          if [ "${{ steps.cache-synology-env.outputs.cache-hit }}" == "true" ]; then
+            echo "✅ Used cached environment"
+          else
+            echo "🔄 Fresh environment deployed"
+          fi
+          ls -la /toolkit/
+          ls -la /toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/
 
       - name: Download NVIDIA open-source kernel modules
         run: |
