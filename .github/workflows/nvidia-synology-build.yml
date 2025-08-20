@@ -174,9 +174,11 @@ jobs:
               cd ${KERNEL_SRC}
               
               # 기본 커널 설정 생성 (Synology 기본 설정)
-              export IGNORE_MISSING_MODULE_SYMVERS=1              
               make olddefconfig
               make modules_prepare
+
+              cd -
+              export IGNORE_MISSING_MODULE_SYMVERS=1  # Only if absolutely necessary
               make scripts
               
               # 필요한 심볼 준비
