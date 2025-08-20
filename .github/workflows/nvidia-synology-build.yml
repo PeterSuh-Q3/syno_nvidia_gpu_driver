@@ -107,8 +107,9 @@ jobs:
           chmod +x "NVIDIA-Linux-x86_64-${NVIDIA_VER}.run"
           
           # .run에서 소스 추출 (비대화형 모드)
-          sudo mkdir -p /tmp/nvidia-source-new
-          sudo sh "NVIDIA-Linux-x86_64-${NVIDIA_VER}.run" --extract-only --target /tmp/nvidia-source-new
+          sudo rm -rf /tmp/nvidia-source
+          sudo mkdir -p /tmp/nvidia-source
+          sudo sh "NVIDIA-Linux-x86_64-${NVIDIA_VER}.run" --extract-only --target /tmp/nvidia-source
           
       - name: Create NVIDIA package source structure
         run: |
@@ -117,7 +118,7 @@ jobs:
           cd "/toolkit/source/nvidia-driver"
           
           # NVIDIA 소스 복사
-          sudo cp -r /tmp/nvidia-source-new/* ./
+          sudo cp -r /tmp/nvidia-source/* ./
           
           # INFO.sh 생성
           sudo tee INFO.sh << 'EOF'
