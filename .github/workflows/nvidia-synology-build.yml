@@ -467,9 +467,6 @@ jobs:
 
       - name: Build NVIDIA package
         run: |
-          ls -l SynoBuildConf/*
-          cat SynoBuildConf/*
-        
           cd /toolkit/pkgscripts-ng
           
           echo "=== Pre-build environment check ==="
@@ -479,16 +476,17 @@ jobs:
           sudo ls -la "/toolkit/source/nvidia-driver/"
           
           # 패키지 빌드 실행
-          cat ./PkgCreate.py
-          sudo ./PkgCreate.py -v ${{ matrix.dsm }} -p ${{ matrix.arch }} nvidia-driver || {
+          #cat ./PkgCreate.py
+          #sudo ./PkgCreate.py -p $ARCH -v $DSM -c $PACKAGE  >&2 || exit 1
+          sudo ./PkgCreate.py -p ${{ matrix.arch }} -v ${{ matrix.dsm }} -c nvidia-driver || {
             echo "=== Build failed - Detailed diagnostics ==="
             echo "Build environment contents:"
             sudo find "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/" -type f -name "Makefile" || true
-            echo "Error log contents:"
-            sudo cat "/toolkit/logs/error.build" || true
-            echo "Build log contents:"  
-            sudo cat "/toolkit/logs/build.log" || true
-            exit 1
+            #echo "Error log contents:"
+            #sudo cat "/toolkit/logs/error.build" || true
+            #echo "Build log contents:"  
+            #sudo cat "/toolkit/logs/build.log" || true
+            #exit 1
           }
           
       - name: Rename and prepare packages
