@@ -464,11 +464,12 @@ jobs:
           
           # 모든 스크립트에 실행권한 부여
           sudo chmod +x SynoBuildConf/*
-          ls -l SynoBuildConf/*
-          cat SynoBuildConf/*
 
       - name: Build NVIDIA package
         run: |
+          ls -l SynoBuildConf/*
+          cat SynoBuildConf/*
+        
           cd /toolkit/pkgscripts-ng
           
           echo "=== Pre-build environment check ==="
