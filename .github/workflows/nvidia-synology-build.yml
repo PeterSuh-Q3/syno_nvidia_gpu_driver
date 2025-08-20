@@ -91,20 +91,56 @@ jobs:
           ls -la /toolkit/
           ls -la /toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/
 
+      - name: Cache NVIDIA open-source kernel modules
+        uses: actions/cache@v4
+        id: cache-nvidia-modules
+        with:
+          path: /tmp/nvidia-open-modules
+          key: nvidia-modules-${{ github.event.inputs.nvidia_version || '535.261.03' }}-${{ runner.os }}-${{ hashFiles('.github/workflows/*.yml') }}
+          restore-keys: |
+            nvidia-modules-${{ github.event.inputs.nvidia_version || '535.261.03' }}-${{ runner.os }}-
+            nvidia-modules-${{ github.event.inputs.nvidia_version || '535.261.03' }}-
+      
       - name: Download NVIDIA open-source kernel modules
+        if: steps.cache-nvidia-modules.outputs.cache-hit != 'true'
         run: |
           set -e
           cd /tmp
           
-          # NVIDIA 오픈소스 커널 모듈 다운로드
           NVIDIA_VER="${{ github.event.inputs.nvidia_version || '535.261.03' }}"
-          # 535+ 버전은 오픈소스 모듈 지원
-          git clone --depth 1 --branch ${NVIDIA_VER} https://github.com/NVIDIA/open-gpu-kernel-modules.git nvidia-open-modules || \
-          git clone --depth 1 https://github.com/NVIDIA/open-gpu-kernel-modules.git nvidia-open-modules
+          echo "Downloading NVIDIA modules version: ${NVIDIA_VER}"
           
-          # Synology 패키지 소스에 복사
+          git clone \
+            --depth 1 \
+            --single-branch \
+            --branch ${NVIDIA_VER} \
+            https://github.com/NVIDIA/open-gpu-kernel-modules.git \
+            nvidia-open-modules || \
+          git clone \
+            --depth 1 \
+            --single-branch \
+            https://github.com/NVIDIA/open-gpu-kernel-modules.git \
+            nvidia-open-modules
+            
+          echo "Repository downloaded successfully"
+          ls -la nvidia-open-modules/
+      
+      - name: Verify NVIDIA modules availability
+        run: |
+          if [ "${{ steps.cache-nvidia-modules.outputs.cache-hit }}" == "true" ]; then
+            echo "✅ Used cached NVIDIA modules"
+          else
+            echo "🔄 Fresh modules downloaded"
+          fi
+          
+          echo "NVIDIA modules ready:"
+          find /tmp/nvidia-open-modules -name "Makefile" | head -5
+      
+      - name: Copy NVIDIA modules to package source
+        run: |
           sudo mkdir -p "/toolkit/source/nvidia-driver"
-          sudo cp -r nvidia-open-modules/* "/toolkit/source/nvidia-driver/"
+          sudo cp -r /tmp/nvidia-open-modules/* "/toolkit/source/nvidia-driver/"
+          echo "NVIDIA modules copied to package source"
           
       - name: Create NVIDIA package source structure
         run: |
