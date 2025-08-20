@@ -1,0 +1,501 @@
+# NVIDIA Driver Package Build for Synology DSM
+# 이 워크플로우는 GitHub Actions에서 Synology pkgscripts-ng 툴킷을 사용해
+# NVIDIA 드라이버 커널 모듈을 DSM용으로 크로스 컴파일하여 .spk 패키지로 생성합니다.
+
+name: Build NVIDIA Driver Package for Synology DSM
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version'
+        required: true
+        default: '1.0.0'
+      nvidia_version:
+        description: 'NVIDIA Driver version'  
+        required: true
+        default: '535.261.03'
+
+jobs:
+  build-nvidia-package:
+    name: Build NVIDIA Driver Package
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ['kvmx64', 'geminilake', 'apollolake']
+        dsm: ['7.0', '7.1', '7.2']
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            python3 \
+            python3-pip \
+            python \
+            bc \
+            libssl-dev \
+            ncurses-dev \
+            curl \
+            wget \
+            cifs-utils \
+            kmod \
+            libc6-i386
+            
+      - name: Create toolkit directory structure
+        run: |
+          sudo mkdir -p /toolkit
+          cd /toolkit
+          sudo git clone https://github.com/SynologyOpenSource/pkgscripts-ng
+          cd pkgscripts-ng
+          sudo git checkout DSM${{ matrix.dsm }}
+          
+      - name: Deploy Synology build environment
+        run: |
+          cd /toolkit/pkgscripts-ng
+          sudo ./EnvDeploy -v ${{ matrix.dsm }} -p ${{ matrix.arch }}
+          
+      - name: Download Synology GPL kernel source and toolchain
+        run: |
+          # DSM 버전에 맞는 Synology 아카이브에서 GPL 소스와 툴체인 다운로드
+          case "${{ matrix.dsm }}" in
+            "7.0")
+              BUILD_NUM="41890"
+              ;;
+            "7.1") 
+              BUILD_NUM="42661"
+              ;;
+            "7.2")
+              BUILD_NUM="64570"
+              ;;
+          esac
+          
+          # 플랫폼별 커널 버전 매핑
+          case "${{ matrix.arch }}" in
+            "kvmx64"|"broadwell"|"broadwellnk")
+              KERNEL_VER="4.4.x"
+              ;;
+            "geminilake"|"apollolake")  
+              KERNEL_VER="4.4.x"
+              ;;
+            *)
+              KERNEL_VER="4.4.x"
+              ;;
+          esac
+          
+          # GPL 커널 소스 다운로드
+          cd /tmp
+          wget "https://global.download.synology.com/download/ToolChain/Synology NAS GPL Source/${{ matrix.dsm }}-${BUILD_NUM}/${{ matrix.arch }}/linux-${KERNEL_VER}.txz"
+          
+          # chroot 환경에 커널 소스 배치
+          sudo mkdir -p "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/kernel"
+          sudo tar -xf "linux-${KERNEL_VER}.txz" -C "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/kernel" --strip-components=1
+
+      - name: Download NVIDIA driver source
+        run: |
+          cd /tmp
+          # NVIDIA .run 다운로드
+          NVIDIA_VER="${{ github.event.inputs.nvidia_version || '535.261.03' }}"
+          wget "https://kr.download.nvidia.com/XFree86/Linux-x86_64/${NVIDIA_VER}/NVIDIA-Linux-x86_64-${NVIDIA_VER}.run"
+          chmod +x "NVIDIA-Linux-x86_64-${NVIDIA_VER}.run"
+          
+          # .run에서 소스 추출 (비대화형 모드)
+          sudo mkdir -p /tmp/nvidia-source
+          sudo sh "NVIDIA-Linux-x86_64-${NVIDIA_VER}.run" --extract-only --target /tmp/nvidia-source
+          
+      - name: Create NVIDIA package source structure
+        run: |
+          # Synology 패키지 소스 디렉토리 생성
+          sudo mkdir -p "/toolkit/source/nvidia-driver"
+          cd "/toolkit/source/nvidia-driver"
+          
+          # NVIDIA 소스 복사
+          sudo cp -r /tmp/nvidia-source/* ./
+          
+          # INFO.sh 생성
+          sudo tee INFO.sh << 'EOF'
+#!/bin/bash
+source /pkgscripts/include/pkg_util.sh
+
+package="nvidia-driver"
+version="${{ github.event.inputs.version || '1.0.0' }}"
+os_min_ver="${{ matrix.dsm }}.0-40000"
+displayname="NVIDIA GPU Driver"
+description="NVIDIA GPU Driver for Synology DSM ${{ matrix.dsm }}"
+arch="$(pkg_get_unified_platform)"
+maintainer="Community Package"
+
+# 의존성 정의
+pkg_dump_info
+EOF
+          
+          sudo chmod +x INFO.sh
+          
+      - name: Create SynoBuildConf directory and scripts
+        run: |
+          cd "/toolkit/source/nvidia-driver"
+          
+          # SynoBuildConf 디렉토리 생성
+          sudo mkdir -p SynoBuildConf
+          
+          # depends 파일 생성
+          sudo tee SynoBuildConf/depends << 'EOF'
+[BuildDependent]
+
+[ReferenceOnly]
+
+[default]
+all="${{ matrix.dsm }}.2"
+EOF
+          
+          # build 스크립트 생성 - NVIDIA 커널 모듈 컴파일
+          sudo tee SynoBuildConf/build << 'EOF'
+#!/bin/bash
+
+set -e
+
+echo "=== Building NVIDIA kernel modules ==="
+
+# 커널 소스 준비
+KERNEL_SRC="/source/kernel"
+NVIDIA_SRC="/source/nvidia-driver"
+
+cd ${NVIDIA_SRC}
+
+# 커널 설정 준비
+if [ -d "${KERNEL_SRC}" ]; then
+    echo "Preparing kernel headers..."
+    cd ${KERNEL_SRC}
+    
+    # 기본 커널 설정 생성 (Synology 기본 설정)
+    make olddefconfig
+    make modules_prepare
+    make scripts
+    
+    # 필요한 심볼 준비
+    [ -f Module.symvers ] || touch Module.symvers
+fi
+
+# NVIDIA 모듈 빌드
+cd ${NVIDIA_SRC}
+
+# 커널 모듈 소스 디렉토리로 이동
+if [ -d "kernel" ]; then
+    cd kernel
+    
+    # Makefile이 있는지 확인
+    if [ -f "Makefile" ]; then
+        echo "Building NVIDIA kernel modules..."
+        
+        # 크로스 컴파일 환경 설정
+        export ARCH=x86_64
+        export CROSS_COMPILE=${CC%-gcc}-
+        
+        # 커널 헤더 경로 설정
+        export KERNEL_SOURCE_PATH="${KERNEL_SRC}"
+        export KERNEL_OUTPUT_PATH="${KERNEL_SRC}"
+        
+        # 모듈 빌드
+        make -j$(nproc) \
+            SYSSRC="${KERNEL_SRC}" \
+            SYSOUT="${KERNEL_SRC}" \
+            CC="${CC}" \
+            modules || {
+            echo "ERROR: Module build failed"
+            echo "Available files:"
+            ls -la
+            echo "Kernel source contents:"
+            ls -la ${KERNEL_SRC}/ || echo "Kernel source not found"
+            exit 1
+        }
+    else
+        echo "ERROR: No Makefile found in kernel directory"
+        ls -la
+        exit 1
+    fi
+else
+    echo "ERROR: No kernel directory found in NVIDIA source"
+    ls -la
+    exit 1
+fi
+
+echo "=== NVIDIA kernel module build complete ==="
+EOF
+          
+          # install 스크립트 생성 - .spk 패키지 생성
+          sudo tee SynoBuildConf/install << 'EOF'
+#!/bin/bash
+
+set -e
+
+echo "=== Creating NVIDIA driver package ==="
+
+# 패키지 작업 디렉토리
+PKG_DIR=/tmp/_nvidia_spk
+rm -rf $PKG_DIR
+mkdir -p $PKG_DIR
+
+# pkg_util.sh 로드
+source /pkgscripts/include/pkg_util.sh
+
+# 내부 tarball 생성 함수
+create_inner_tarball() {
+    local inner_tarball_dir=/tmp/_inner_tarball
+    rm -rf $inner_tarball_dir && mkdir -p $inner_tarball_dir
+    
+    # 모듈 설치 디렉토리 생성
+    mkdir -p $inner_tarball_dir/lib/modules/drivers/nvidia
+    mkdir -p $inner_tarball_dir/usr/bin
+    mkdir -p $inner_tarball_dir/etc/modprobe.d
+    
+    # 컴파일된 커널 모듈들 복사
+    if [ -d "/source/nvidia-driver/kernel" ]; then
+        find /source/nvidia-driver/kernel -name "*.ko" -exec cp {} $inner_tarball_dir/lib/modules/drivers/nvidia/ \;
+    fi
+    
+    # modprobe 설정 파일 생성
+    cat > $inner_tarball_dir/etc/modprobe.d/nvidia.conf << 'MODPROBE_EOF'
+# NVIDIA driver modules
+alias char-major-195* nvidia
+options nvidia NVreg_DeviceFileUID=0 NVreg_DeviceFileGID=0 NVreg_DeviceFileMode=0666
+MODPROBE_EOF
+    
+    # package.tgz 생성
+    pkg_make_package $inner_tarball_dir "${PKG_DIR}"
+}
+
+# SPK 생성 함수
+create_spk() {
+    local scripts_dir=$PKG_DIR/scripts
+    
+    # 스크립트 디렉토리 생성
+    mkdir -p $scripts_dir
+    
+    # 패키지 아이콘 복사 (기본 아이콘 생성)
+    # 64x64 PNG 아이콘 필요
+    if [ ! -f PACKAGE_ICON.PNG ]; then
+        # 기본 아이콘 생성 (실제로는 nvidia 로고 등을 사용)
+        echo "Creating default package icon..."
+        # 여기서는 빈 PNG 파일 생성 (실제 구현시 적절한 아이콘 필요)
+        touch PACKAGE_ICON.PNG
+    fi
+    cp -av PACKAGE_ICON*.PNG $PKG_DIR/ 2>/dev/null || true
+    
+    # INFO 파일 생성
+    ./INFO.sh > INFO
+    cp INFO $PKG_DIR/INFO
+    
+    # 패키지 스크립트들 생성
+    
+    # start-stop-status 스크립트
+    cat > $scripts_dir/start-stop-status << 'SCRIPT_EOF'
+#!/bin/sh
+
+case $1 in
+    start)
+        # 모듈 로드
+        echo "Loading NVIDIA kernel modules..." > $SYNOPKG_TEMP_LOGFILE
+        
+        # nvidia 모듈 로드 시도
+        if [ -d /var/packages/nvidia-driver/target/lib/modules/drivers/nvidia ]; then
+            for module in nvidia-drm nvidia-modeset nvidia; do
+                if [ -f "/var/packages/nvidia-driver/target/lib/modules/drivers/nvidia/${module}.ko" ]; then
+                    insmod "/var/packages/nvidia-driver/target/lib/modules/drivers/nvidia/${module}.ko" 2>/dev/null || true
+                fi
+            done
+        fi
+        
+        # 디바이스 노드 생성
+        if [ -c /dev/nvidia0 ]; then
+            chmod 666 /dev/nvidia*
+        fi
+        
+        echo "NVIDIA driver started" >> $SYNOPKG_TEMP_LOGFILE
+        exit 0
+        ;;
+    stop)
+        echo "Unloading NVIDIA kernel modules..." > $SYNOPKG_TEMP_LOGFILE
+        
+        # 역순으로 모듈 언로드
+        for module in nvidia nvidia-modeset nvidia-drm; do
+            rmmod $module 2>/dev/null || true
+        done
+        
+        echo "NVIDIA driver stopped" >> $SYNOPKG_TEMP_LOGFILE
+        exit 0
+        ;;
+    status)
+        # nvidia 모듈이 로드되어 있는지 확인
+        if lsmod | grep -q nvidia; then
+            exit 0
+        else
+            exit 1
+        fi
+        ;;
+esac
+SCRIPT_EOF
+
+    # postinst 스크립트
+    cat > $scripts_dir/postinst << 'SCRIPT_EOF'
+#!/bin/sh
+
+# 모듈 디렉토리 생성
+mkdir -p /lib/modules/$(uname -r)/kernel/drivers/nvidia
+
+# 모듈 복사
+if [ -d ${SYNOPKG_PKGDEST}/lib/modules/drivers/nvidia ]; then
+    cp ${SYNOPKG_PKGDEST}/lib/modules/drivers/nvidia/*.ko /lib/modules/$(uname -r)/kernel/drivers/nvidia/ 2>/dev/null || true
+fi
+
+# modprobe.d 설정 복사
+if [ -f ${SYNOPKG_PKGDEST}/etc/modprobe.d/nvidia.conf ]; then
+    cp ${SYNOPKG_PKGDEST}/etc/modprobe.d/nvidia.conf /etc/modprobe.d/
+fi
+
+# depmod 실행
+depmod -a
+
+exit 0
+SCRIPT_EOF
+
+    # preuninst 스크립트  
+    cat > $scripts_dir/preuninst << 'SCRIPT_EOF'
+#!/bin/sh
+
+# NVIDIA 모듈 언로드
+for module in nvidia nvidia-modeset nvidia-drm; do
+    rmmod $module 2>/dev/null || true
+done
+
+# 설치된 파일 제거
+rm -f /lib/modules/$(uname -r)/kernel/drivers/nvidia/*.ko 2>/dev/null || true
+rm -f /etc/modprobe.d/nvidia.conf 2>/dev/null || true
+
+# depmod 갱신
+depmod -a
+
+exit 0
+SCRIPT_EOF
+
+    # 모든 스크립트 실행권한 부여
+    chmod +x $scripts_dir/*
+    
+    # 최종 SPK 생성
+    mkdir -p /image/packages
+    pkg_make_spk ${PKG_DIR} "/image/packages" $(pkg_get_spk_family_name)
+}
+
+# 실행
+create_inner_tarball
+create_spk
+
+echo "=== NVIDIA driver package created successfully ==="
+EOF
+          
+          # 모든 스크립트에 실행권한 부여
+          sudo chmod +x SynoBuildConf/*
+          
+      - name: Build NVIDIA package
+        run: |
+          cd /toolkit/pkgscripts-ng
+          
+          echo "=== Starting package build process ==="
+          echo "Platform: ${{ matrix.arch }}, DSM: ${{ matrix.dsm }}"
+          
+          # 패키지 빌드 실행
+          sudo ./PkgCreate.py -v ${{ matrix.dsm }} -p ${{ matrix.arch }} nvidia-driver || {
+            echo "Build failed. Checking logs..."
+            echo "=== Build environment contents ==="
+            sudo ls -la "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/" || true
+            echo "=== Package source contents ==="
+            sudo ls -la "/toolkit/source/nvidia-driver/" || true
+            exit 1
+          }
+          
+      - name: Rename and prepare packages
+        run: |
+          cd /toolkit/result_spk
+          ls -la
+          
+          # 생성된 패키지 찾기
+          for spk_dir in */; do
+            if [ -d "$spk_dir" ]; then
+              cd "$spk_dir"
+              ls -l *.spk
+              
+              # 디버그 패키지 제거
+              rm -f *_debug.spk || true
+              
+              # 패키지명에 DSM 버전 추가
+              for f in *.spk; do
+                if [ -f "$f" ]; then
+                  mv "$f" "${f%.spk}-${{ matrix.arch }}-${{ matrix.dsm }}.spk"
+                fi
+              done
+              
+              ls -l *.spk
+              cd ..
+            fi
+          done
+          
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nvidia-driver-${{ matrix.arch }}-${{ matrix.dsm }}
+          path: /toolkit/result_spk/*/*.spk
+          
+      - name: Release packages
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            /toolkit/result_spk/*/*.spk
+
+  create-combined-release:
+    if: github.event_name == 'release'
+    needs: build-nvidia-package  
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        
+      - name: Create combined release info
+        run: |
+          echo "# NVIDIA Driver Package for Synology DSM" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "이 릴리스는 다음 플랫폼과 DSM 버전을 지원합니다:" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## 지원 플랫폼" >> RELEASE_NOTES.md
+          echo "- kvmx64 (Virtual Machine, x86_64)" >> RELEASE_NOTES.md  
+          echo "- geminilake (Intel Gemini Lake)" >> RELEASE_NOTES.md
+          echo "- apollolake (Intel Apollo Lake)" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## 지원 DSM 버전" >> RELEASE_NOTES.md
+          echo "- DSM 7.0, 7.1, 7.2" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## 설치 방법" >> RELEASE_NOTES.md
+          echo "1. 해당 모델/DSM 버전에 맞는 .spk 파일 다운로드" >> RELEASE_NOTES.md
+          echo "2. DSM 패키지 센터에서 수동 설치" >> RELEASE_NOTES.md
+          echo "3. 패키지 시작 후 GPU 상태 확인" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "## 주의사항" >> RELEASE_NOTES.md
+          echo "- 이 패키지는 커뮤니티에서 개발된 비공식 패키지입니다" >> RELEASE_NOTES.md
+          echo "- 설치 전 시스템 백업을 권장합니다" >> RELEASE_NOTES.md
+          echo "- Synology 공식 GPU 패키지와 충돌할 수 있습니다" >> RELEASE_NOTES.md
+          
+      - name: Update release with notes
+        uses: softprops/action-gh-release@v2  
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            nvidia-driver-*/*.spk
