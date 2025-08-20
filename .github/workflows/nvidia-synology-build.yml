@@ -254,6 +254,7 @@ jobs:
 
           make olddefconfig
           make modules_prepare
+          make modules_prepare
 
           make scripts
           [ -f Module.symvers ] || touch Module.symvers
