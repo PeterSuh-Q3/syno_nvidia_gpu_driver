@@ -5,6 +5,8 @@
 name: Build NVIDIA Driver Package for Synology DSM
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
