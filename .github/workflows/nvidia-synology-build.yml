@@ -79,13 +79,6 @@ jobs:
           
       - name: Create NVIDIA package source structure
         run: |
-          # Synology 패키지 소스 디렉토리 생성
-          sudo mkdir -p "/toolkit/source/nvidia-driver"
-          cd "/toolkit/source/nvidia-driver"
-          
-          # NVIDIA 소스 복사
-          sudo cp -r /tmp/nvidia-source/* ./
-          
           # INFO.sh 생성
           sudo tee INFO.sh << 'EOF'
           #!/bin/bash
