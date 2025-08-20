@@ -107,8 +107,6 @@ jobs:
           chmod +x "NVIDIA-Linux-x86_64-${NVIDIA_VER}.run"
           
           # .run에서 소스 추출 (비대화형 모드)
-          sudo rm -rf /tmp/nvidia-source
-          sudo mkdir -p /tmp/nvidia-source
           sudo sh "NVIDIA-Linux-x86_64-${NVIDIA_VER}.run" --extract-only --target /tmp/nvidia-source
           
       - name: Create NVIDIA package source structure
