@@ -253,6 +253,9 @@ jobs:
           fi
           
           make modules_prepare
+          cd -
+          export IGNORE_MISSING_MODULE_SYMVERS=1  # Only if absolutely necessary
+
           make scripts
           [ -f Module.symvers ] || touch Module.symvers
           
