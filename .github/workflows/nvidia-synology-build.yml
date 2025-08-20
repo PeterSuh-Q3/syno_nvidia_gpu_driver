@@ -191,7 +191,7 @@ jobs:
           os_min_ver="${{ matrix.dsm }}.0-40000"
           displayname="NVIDIA GPU Driver"
           description="NVIDIA GPU Driver for Synology DSM ${{ matrix.dsm }}"
-          arch="$(pkg_get_unified_platform)"
+          arch="${{ matrix.arch }}"
           maintainer="Community Package"
           
           # 의존성 정의
