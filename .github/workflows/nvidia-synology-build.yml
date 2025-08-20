@@ -62,42 +62,6 @@ jobs:
           cd /toolkit/pkgscripts-ng
           sudo ./EnvDeploy -v ${{ matrix.dsm }} -p ${{ matrix.arch }}
 
-      - name: Download Synology GPL kernel source and toolchain
-        run: |
-          set -e
-          
-          # DSM 버전별 정확한 빌드 번호 (실제 확인 필요)
-          case "${{ matrix.dsm }}" in
-            "7.0")
-              BUILD_NUM="42218"  # 실제 확인된 번호로 수정
-              ;;
-            "7.1") 
-              BUILD_NUM="42962"
-              ;;
-            "7.2")
-              BUILD_NUM="69057"
-              ;;
-          esac
-          
-          echo "Downloading GPL source for DSM ${{ matrix.dsm }}, build ${BUILD_NUM}, arch ${{ matrix.arch }}"
-          
-          cd /tmp
-          GPL_URL="https://global.download.synology.com/download/ToolChain/Synology%20NAS%20GPL%20Source/${{ matrix.dsm }}-${BUILD_NUM}/${{ matrix.arch }}/linux-4.4.x.txz"
-          
-          wget -v "$GPL_URL" || {
-            echo "Failed to download GPL source. Trying alternative..."
-            # 대체 소스나 다른 빌드 번호 시도
-            exit 1
-          }
-          
-          # chroot 환경에 정확히 배치
-          CHROOT_KERNEL_PATH="/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/kernel"
-          sudo mkdir -p "$CHROOT_KERNEL_PATH"
-          sudo tar -xf "linux-4.4.x.txz" -C "$CHROOT_KERNEL_PATH" --strip-components=1
-          
-          echo "Kernel source deployed to chroot environment:"
-          sudo ls -la "$CHROOT_KERNEL_PATH"
-
       - name: Download NVIDIA open-source kernel modules
         run: |
           set -e
