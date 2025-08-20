@@ -183,7 +183,7 @@ jobs:
 
           sudo tee /toolkit/source/nvidia-driver/INFO.sh << 'EOF'          
           #!/bin/bash
-          source /pkgscripts/include/pkg_util.sh
+          source /toolkit/pkgscripts-ng/include/pkg_util.sh
           
           package="nvidia-driver"
           version="${{ github.event.inputs.version || '1.0.0' }}"
@@ -307,7 +307,7 @@ jobs:
           mkdir -p $PKG_DIR
           
           # pkg_util.sh 로드
-          source /pkgscripts/include/pkg_util.sh
+          source /toolkit/pkgscripts-ng/include/pkg_util.sh
           
           # 내부 tarball 생성 함수
           create_inner_tarball() {
