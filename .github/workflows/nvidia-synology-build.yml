@@ -78,7 +78,7 @@ jobs:
         run: |
           cd /toolkit/pkgscripts-ng
           sudo ./EnvDeploy -v ${{ matrix.dsm }} -p ${{ matrix.arch }}
-          ls -l /toolkit/pkgscripts-ng
+          ls -l /toolkit/pkgscripts-ng/include
 
       # 캐시 적중 확인
       - name: Verify build environment
