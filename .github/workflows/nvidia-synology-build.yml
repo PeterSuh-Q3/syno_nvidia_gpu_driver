@@ -120,7 +120,7 @@ jobs:
           #!/bin/bash
           set -e
           
-          echo "=== Building NVIDIA kernel modules ==="
+          echo "=== Building NVIDIA open-source kernel modules ==="
           
           # chroot 내부 경로 (빌드 스크립트는 chroot에서 실행됨)
           KERNEL_SRC="/source/kernel"
@@ -183,6 +183,7 @@ jobs:
           
           echo "=== Build complete. Generated modules:"
           find . -name "*.ko" -type f
+          
           EOF
           
           # install 스크립트 생성 - .spk 패키지 생성
@@ -210,10 +211,10 @@ jobs:
               mkdir -p $inner_tarball_dir/lib/modules/drivers/nvidia
               mkdir -p $inner_tarball_dir/usr/bin
               mkdir -p $inner_tarball_dir/etc/modprobe.d
-              
+
               # 컴파일된 커널 모듈들 복사
-              if [ -d "/source/nvidia-driver/kernel" ]; then
-                  find /source/nvidia-driver/kernel -name "*.ko" -exec cp {} $inner_tarball_dir/lib/modules/drivers/nvidia/ \;
+              if [ -d "/source/nvidia-driver" ]; then
+                  find /source/nvidia-driver -name "*.ko" -exec cp {} $inner_tarball_dir/lib/modules/drivers/nvidia/ \;
               fi
               
               # modprobe 설정 파일 생성
