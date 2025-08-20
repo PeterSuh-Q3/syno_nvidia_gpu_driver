@@ -204,10 +204,10 @@ jobs:
           cd "/toolkit/source/nvidia-driver"
           
           # SynoBuildConf 디렉토리 생성
-          sudo mkdir -p SynoBuildConf
+          sudo mkdir -p /toolkit/source/nvidia-driver/SynoBuildConf
           
           # depends 파일 생성
-          sudo tee SynoBuildConf/depends << 'EOF'
+          sudo tee /toolkit/source/nvidia-driver/SynoBuildConf/depends << 'EOF'
           [BuildDependent]
           
           [ReferenceOnly]
@@ -217,7 +217,7 @@ jobs:
           EOF
           
           # build 스크립트 생성 - NVIDIA 커널 모듈 컴파일
-          sudo tee SynoBuildConf/build << 'EOF'
+          sudo tee /toolkit/source/nvidia-driver/SynoBuildConf/build << 'EOF'
           #!/bin/bash
           set -e
           
@@ -294,7 +294,7 @@ jobs:
         run: |
           
           # install 스크립트 생성 - .spk 패키지 생성
-          sudo tee SynoBuildConf/install << 'EOF'
+          sudo tee /toolkit/source/nvidia-driver/SynoBuildConf/install << 'EOF'
           #!/bin/bash
           
           set -e
@@ -463,7 +463,7 @@ jobs:
           EOF
           
           # 모든 스크립트에 실행권한 부여
-          sudo chmod +x SynoBuildConf/*
+          sudo chmod +x /toolkit/source/nvidia-driver/SynoBuildConf/*
 
       - name: Build NVIDIA package
         run: |
@@ -473,20 +473,22 @@ jobs:
           echo "Chroot environment:"
           sudo ls -la "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/"
           echo "Package source:"
-          sudo ls -la "/toolkit/source/nvidia-driver/"
+          #sudo ls -la "/toolkit/source/nvidia-driver/"
+          # 먼저 구조 확인
+          sudo tree "/toolkit/source/nvidia-driver/" || sudo find "/toolkit/source/nvidia-driver/" | head -20
+          # 그 다음 중요 파일들 내용 확인  
+          sudo find "/toolkit/source/nvidia-driver/" -name "SynoBuildConf" -exec find {} -type f \; | while read f; do echo "=== $f ==="; sudo cat "$f"; echo; done
           
           # 패키지 빌드 실행
-          #cat ./PkgCreate.py
-          #sudo ./PkgCreate.py -p $ARCH -v $DSM -c $PACKAGE  >&2 || exit 1
           sudo ./PkgCreate.py -p ${{ matrix.arch }} -v ${{ matrix.dsm }} -c nvidia-driver || {
             echo "=== Build failed - Detailed diagnostics ==="
             echo "Build environment contents:"
             sudo find "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/" -type f -name "Makefile" || true
-            #echo "Error log contents:"
-            #sudo cat "/toolkit/logs/error.build" || true
-            #echo "Build log contents:"  
-            #sudo cat "/toolkit/logs/build.log" || true
-            #exit 1
+            echo "Error log contents:"
+            sudo cat "/toolkit/logs/error.build" || true
+            echo "Build log contents:"  
+            sudo cat "/toolkit/logs/build.log" || true
+            exit 1
           }
           
       - name: Rename and prepare packages
