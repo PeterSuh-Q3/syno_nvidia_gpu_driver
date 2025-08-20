@@ -1,1 +1,165 @@
-.
+#!/bin/bash
+
+set -e
+
+echo "=== Creating NVIDIA driver package ==="
+
+# 패키지 작업 디렉토리
+PKG_DIR=/tmp/_nvidia_spk
+rm -rf $PKG_DIR
+mkdir -p $PKG_DIR
+
+# pkg_util.sh 로드
+source /pkgscripts/include/pkg_util.sh
+
+# 내부 tarball 생성 함수
+create_inner_tarball() {
+    local inner_tarball_dir=/tmp/_inner_tarball
+    rm -rf $inner_tarball_dir && mkdir -p $inner_tarball_dir
+    
+    # 모듈 설치 디렉토리 생성
+    mkdir -p $inner_tarball_dir/lib/modules/drivers/nvidia
+    mkdir -p $inner_tarball_dir/usr/bin
+    mkdir -p $inner_tarball_dir/etc/modprobe.d
+
+    # 컴파일된 커널 모듈들 복사
+    if [ -d "/source/nvidia-driver" ]; then
+        find /source/nvidia-driver -name "*.ko" -exec cp {} $inner_tarball_dir/lib/modules/drivers/nvidia/ \;
+    fi
+    
+    # modprobe 설정 파일 생성
+    cat > $inner_tarball_dir/etc/modprobe.d/nvidia.conf << 'MODPROBE_EOF'
+# NVIDIA driver modules
+alias char-major-195* nvidia
+options nvidia NVreg_DeviceFileUID=0 NVreg_DeviceFileGID=0 NVreg_DeviceFileMode=0666
+MODPROBE_EOF
+    
+    # package.tgz 생성
+    pkg_make_package $inner_tarball_dir "${PKG_DIR}"
+}
+
+# SPK 생성 함수
+create_spk() {
+    local scripts_dir=$PKG_DIR/scripts
+    
+    # 스크립트 디렉토리 생성
+    mkdir -p $scripts_dir
+    
+    # 패키지 아이콘 복사 (기본 아이콘 생성)
+    # 64x64 PNG 아이콘 필요
+    if [ ! -f PACKAGE_ICON.PNG ]; then
+        # 기본 아이콘 생성 (실제로는 nvidia 로고 등을 사용)
+        echo "Creating default package icon..."
+        # 여기서는 빈 PNG 파일 생성 (실제 구현시 적절한 아이콘 필요)
+        touch PACKAGE_ICON.PNG
+    fi
+    cp -av PACKAGE_ICON*.PNG $PKG_DIR/ 2>/dev/null || true
+    
+    # INFO 파일 생성
+    /source/nvidia-driver/INFO.sh > "$PKG_DIR/INFO"
+    
+    # 패키지 스크립트들 생성
+    
+    # start-stop-status 스크립트
+    cat > $scripts_dir/start-stop-status << 'SCRIPT_EOF'
+#!/bin/sh
+
+case $1 in
+    start)
+        # 모듈 로드
+        echo "Loading NVIDIA kernel modules..." > $SYNOPKG_TEMP_LOGFILE
+        
+        # nvidia 모듈 로드 시도
+        if [ -d /var/packages/nvidia-driver/target/lib/modules/drivers/nvidia ]; then
+            for module in nvidia-drm nvidia-modeset nvidia; do
+                if [ -f "/var/packages/nvidia-driver/target/lib/modules/drivers/nvidia/${module}.ko" ]; then
+                    insmod "/var/packages/nvidia-driver/target/lib/modules/drivers/nvidia/${module}.ko" 2>/dev/null || true
+                fi
+            done
+        fi
+        
+        # 디바이스 노드 생성
+        if [ -c /dev/nvidia0 ]; then
+            chmod 666 /dev/nvidia*
+        fi
+        
+        echo "NVIDIA driver started" >> $SYNOPKG_TEMP_LOGFILE
+        exit 0
+        ;;
+    stop)
+        echo "Unloading NVIDIA kernel modules..." > $SYNOPKG_TEMP_LOGFILE
+        
+        # 역순으로 모듈 언로드
+        for module in nvidia nvidia-modeset nvidia-drm; do
+            rmmod $module 2>/dev/null || true
+        done
+        
+        echo "NVIDIA driver stopped" >> $SYNOPKG_TEMP_LOGFILE
+        exit 0
+        ;;
+    status)
+        # nvidia 모듈이 로드되어 있는지 확인
+        if lsmod | grep -q nvidia; then
+            exit 0
+        else
+            exit 1
+        fi
+        ;;
+esac
+SCRIPT_EOF
+
+    # postinst 스크립트
+    cat > $scripts_dir/postinst << 'SCRIPT_EOF'
+#!/bin/sh
+
+# 모듈 디렉토리 생성
+mkdir -p /lib/modules/$(uname -r)/kernel/drivers/nvidia
+
+# 모듈 복사
+if [ -d ${SYNOPKG_PKGDEST}/lib/modules/drivers/nvidia ]; then
+    cp ${SYNOPKG_PKGDEST}/lib/modules/drivers/nvidia/*.ko /lib/modules/$(uname -r)/kernel/drivers/nvidia/ 2>/dev/null || true
+fi
+
+# modprobe.d 설정 복사
+if [ -f ${SYNOPKG_PKGDEST}/etc/modprobe.d/nvidia.conf ]; then
+    cp ${SYNOPKG_PKGDEST}/etc/modprobe.d/nvidia.conf /etc/modprobe.d/
+fi
+
+# depmod 실행
+depmod -a
+
+exit 0
+SCRIPT_EOF
+
+    # preuninst 스크립트  
+    cat > $scripts_dir/preuninst << 'SCRIPT_EOF'
+#!/bin/sh
+
+# NVIDIA 모듈 언로드
+for module in nvidia nvidia-modeset nvidia-drm; do
+    rmmod $module 2>/dev/null || true
+done
+
+# 설치된 파일 제거
+rm -f /lib/modules/$(uname -r)/kernel/drivers/nvidia/*.ko 2>/dev/null || true
+rm -f /etc/modprobe.d/nvidia.conf 2>/dev/null || true
+
+# depmod 갱신
+depmod -a
+
+exit 0
+SCRIPT_EOF
+
+    # 모든 스크립트 실행권한 부여
+    chmod +x $scripts_dir/*
+    
+    # 최종 SPK 생성
+    mkdir -p /image/packages
+    pkg_make_spk ${PKG_DIR} "/image/packages" $(pkg_get_spk_family_name)
+}
+
+# 실행
+create_inner_tarball
+create_spk
+
+echo "=== NVIDIA driver package created successfully ==="
