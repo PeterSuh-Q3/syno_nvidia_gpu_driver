@@ -140,10 +140,10 @@ jobs:
           
           echo "NVIDIA modules ready:"
           find /tmp/nvidia-open-modules -name "Makefile" | head -5
-      
+
       - name: Copy NVIDIA modules to package source
         run: |
-          sudo mkdir -p "/toolkit/source/nvidia-driver"
+          sudo mkdir -p "/toolkit/source/nvidia-driver"        
           sudo cp -r /tmp/nvidia-open-modules/* "/toolkit/source/nvidia-driver/"
           echo "NVIDIA modules copied to package source"
           
@@ -156,7 +156,6 @@ jobs:
           #!/bin/bash
           source /pkgscripts/include/pkg_util.sh
 
-          name="nvidia-driver"
           package="nvidia-driver"
           version="${{ github.event.inputs.version || '1.0.0' }}"
           displayname="NVIDIA GPU Driver"
@@ -183,6 +182,11 @@ jobs:
           EOF
           
           sudo chmod +x /toolkit/source/nvidia-driver/INFO.sh
+
+          # INFO 파일 생성
+          /source/nvidia-driver/INFO.sh > "/toolkit/source/nvidia-driver/INFO"
+          ls -l "/toolkit/source/nvidia-driver/INFO" || true
+          sudo cp -vf "/toolkit/source/nvidia-driver/INFO" "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
           
       - name: Create SynoBuildConf directory and scripts
         run: |
@@ -336,11 +340,6 @@ jobs:
                   touch PACKAGE_ICON.PNG
               fi
               cp -av PACKAGE_ICON*.PNG $PKG_DIR/ 2>/dev/null || true
-              
-              # INFO 파일 생성
-              /source/nvidia-driver/INFO.sh > "$PKG_DIR/INFO"
-              ls -l "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO" || true
-              cat "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO" || true
                             
               # 패키지 스크립트들 생성
               
