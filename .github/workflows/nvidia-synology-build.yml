@@ -368,7 +368,11 @@ jobs:
               cp -av PACKAGE_ICON*.PNG $PKG_DIR/ 2>/dev/null || true
               
               # INFO 파일 생성
-              /source/nvidia-driver/INFO.sh > "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
+              /source/nvidia-driver/INFO.sh > "$PKG_DIR/INFO"
+              echo "$PKG_DIR/INFO"
+              ls -l "$PKG_DIR/INFO"
+              cat "$PKG_DIR/INFO"
+
               echo "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
               ls -l "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
               cat "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
