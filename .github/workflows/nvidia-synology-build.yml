@@ -184,7 +184,7 @@ jobs:
           sudo chmod +x /toolkit/source/nvidia-driver/INFO.sh
 
           # INFO 파일 생성
-          /source/nvidia-driver/INFO.sh > "/tmp/INFO"
+          /toolkit/source/nvidia-driver/INFO.sh > "/tmp/INFO"
           ls -l "/tmp/INFO" || true
           sudo cp -vf "/tmp/INFO" "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
           
