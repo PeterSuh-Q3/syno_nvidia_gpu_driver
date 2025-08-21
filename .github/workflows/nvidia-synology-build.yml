@@ -339,6 +339,8 @@ jobs:
               
               # INFO 파일 생성
               /source/nvidia-driver/INFO.sh > "$PKG_DIR/INFO"
+              ls -l "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO" || true
+              cat "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO" || true
                             
               # 패키지 스크립트들 생성
               
