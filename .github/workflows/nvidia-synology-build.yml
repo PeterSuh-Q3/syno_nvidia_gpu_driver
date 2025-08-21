@@ -4,9 +4,6 @@
 
 name: Build NVIDIA Driver Package for Synology DSM
 
-env:
-  NVIDIA_VERSION: ${{ inputs.nvidia_version || github.event.inputs.nvidia_version || '535.261.03' }}
-
 on:
   release:
     types: [published]
@@ -53,38 +50,13 @@ jobs:
             libc6-i386 \
             tree
 
-      - name: Cache pkgscripts-ng
-        uses: actions/cache@v4
-        id: cache-pkgscripts
-        with:
-          path: pkgscripts-ng                      # 워크스페이스 내부
-          key: pkgscripts-ng-${{ runner.os }}-${{ matrix.dsm }}-${{ hashFiles('.github/workflows/*.yml') }}
-          restore-keys: |
-            pkgscripts-ng-${{ runner.os }}-${{ matrix.dsm }}-
-            pkgscripts-ng-${{ runner.os }}-
-
-      - name: Prepare pkgscripts-ng in workspace
+      - name: Create toolkit directory structure
         run: |
-          set -e
-          mkdir -p "$GITHUB_WORKSPACE"
-          cd "$GITHUB_WORKSPACE"
-          if [ "${{ steps.cache-pkgscripts.outputs.cache-hit }}" = "true" ]; then
-            echo "✅ Using cached pkgscripts-ng"
-          else
-            echo "🔄 Cloning pkgscripts-ng"
-            git clone https://github.com/SynologyOpenSource/pkgscripts-ng pkgscripts-ng
-          fi
-          cd pkgscripts-ng
-          # 원하는 브랜치/태그로 체크아웃(매트릭스 dsm 반영)
-          git fetch --all --tags --prune
-          git checkout "DSM${{ matrix.dsm }}" || git checkout -B "DSM${{ matrix.dsm }}" "origin/DSM${{ matrix.dsm }}"
-
-          # /toolkit 경로와 호환되도록 심볼릭 링크 구성
           sudo mkdir -p /toolkit
-          if [ -L /toolkit/pkgscripts-ng ] || [ -d /toolkit/pkgscripts-ng ]; then
-            sudo rm -rf /toolkit/pkgscripts-ng
-          fi
-          sudo ln -s "$GITHUB_WORKSPACE/pkgscripts-ng" /toolkit/pkgscripts-ng
+          cd /toolkit
+          sudo git clone https://github.com/SynologyOpenSource/pkgscripts-ng
+          cd pkgscripts-ng
+          sudo git checkout DSM${{ matrix.dsm }}
 
       - name: Deploy Synology build environment
         run: |
@@ -114,7 +86,7 @@ jobs:
         uses: actions/cache@v4
         id: cache-nvidia-modules
         with:
-          path: nvidia-open-modules       # 워크스페이스 내부 상대경로
+          path: /tmp/nvidia-open-modules
           key: nvidia-modules-${{ github.event.inputs.nvidia_version || '535.261.03' }}-${{ runner.os }}-${{ hashFiles('.github/workflows/*.yml') }}
           restore-keys: |
             nvidia-modules-${{ github.event.inputs.nvidia_version || '535.261.03' }}-${{ runner.os }}-
@@ -124,14 +96,14 @@ jobs:
         if: steps.cache-nvidia-modules.outputs.cache-hit != 'true'
         run: |
           set -e
-          # 워크스페이스 내부에 클론
-          cd $GITHUB_WORKSPACE
+          cd /tmp
           NVIDIA_VER="${{ github.event.inputs.nvidia_version || '535.261.03' }}"
           echo "Downloading NVIDIA modules version: ${NVIDIA_VER}"
+
           git clone \
             --depth 1 \
             --single-branch \
-            --branch "${NVIDIA_VER}" \
+            --branch ${NVIDIA_VER} \
             https://github.com/NVIDIA/open-gpu-kernel-modules.git \
             nvidia-open-modules || \
           git clone \
@@ -139,54 +111,25 @@ jobs:
             --single-branch \
             https://github.com/NVIDIA/open-gpu-kernel-modules.git \
             nvidia-open-modules
+
           echo "Repository downloaded successfully"
           ls -la nvidia-open-modules/
 
       - name: Verify NVIDIA modules availability
         run: |
-          cd "$GITHUB_WORKSPACE"
           if [ "${{ steps.cache-nvidia-modules.outputs.cache-hit }}" == "true" ]; then
             echo "✅ Used cached NVIDIA modules"
           else
             echo "🔄 Fresh modules downloaded"
           fi
           echo "NVIDIA modules ready:"
-          find nvidia-open-modules -name "Makefile" | head -5
+          find /tmp/nvidia-open-modules -name "Makefile" | head -5
 
       - name: Copy NVIDIA modules to package source
         run: |
           sudo mkdir -p "/toolkit/source/nvidia-driver"
-          sudo cp -r "$GITHUB_WORKSPACE/nvidia-open-modules/"* "/toolkit/source/nvidia-driver/"
+          sudo cp -r /tmp/nvidia-open-modules/* "/toolkit/source/nvidia-driver/"
           echo "NVIDIA modules copied to package source"
-
-      - name: Extract and Package NVIDIA User-space Libraries & Firmware
-        run: |
-          set -e
-          # 0) .run 파일이 워크스페이스에 없으면 다운로드(필요 시)
-          if [ ! -f "$GITHUB_WORKSPACE/NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run" ]; then
-            echo "Downloading NVIDIA .run to workspace"
-            cd "$GITHUB_WORKSPACE"
-            # modules
-            NVIDIA_VER="${NVIDIA_VERSION}"
-            # .run
-            wget -O "NVIDIA-Linux-x86_64-${NVIDIA_VERSION}.run" \
-              "https://us.download.nvidia.com/XFree86/Linux-x86_64/${NVIDIA_VERSION}/NVIDIA-Linux-x86_64-${NVIDIA_VERSION}.run"
-          fi
-
-          # 1) NVIDIA .run 추출 (워크스페이스 하위)
-          WORK_DIR="$GITHUB_WORKSPACE/nvidia-extract"
-          mkdir -p "$WORK_DIR"
-          cd "$WORK_DIR"
-          chmod +x "$GITHUB_WORKSPACE/NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run"
-          "$GITHUB_WORKSPACE/NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run" --extract-only
-
-          # 2) synopkg 패키지 소스에 라이브러리/펌웨어 복사
-          sudo mkdir -p /toolkit/source/nvidia-driver/usr/lib
-          sudo cp -v "$WORK_DIR/usr/lib/libnvidia-"*.so* /toolkit/source/nvidia-driver/usr/lib/ || true
-          sudo mkdir -p /toolkit/source/nvidia-driver/lib/firmware/nvidia
-          sudo cp -v "$WORK_DIR/lib/firmware/nvidia/"*.bin /toolkit/source/nvidia-driver/lib/firmware/nvidia/ || true
-
-          # 3) 소스 트리 구조 유지
 
       - name: Create NVIDIA package source structure (INFO FILE)
         run: |
@@ -313,8 +256,11 @@ jobs:
           export SYSSRC="${KERNEL_SRC}"
           export SYSOUT="${KERNEL_SRC}"
 
-          make -C kernel-open modules \
-            KERNEL_UNAME="${KERNEL_UNAME}" SYSSRC="${SYSSRC}" SYSOUT="${SYSOUT}" -j"$(nproc)"
+          make modules \
+              KERNEL_UNAME=${KERNEL_UNAME} \
+              SYSSRC=${KERNEL_SRC} \
+              SYSOUT=${KERNEL_SRC} \
+              -j$(nproc)
 
           echo "=== Build complete. Generated modules:"
           find . -name "*.ko" -type f || true
