@@ -115,92 +115,81 @@ jobs:
           sudo cp -r /tmp/nvidia-open-modules/* "/toolkit/source/nvidia-driver/"
           echo "NVIDIA modules copied to package source"
 
-      - name: Extract and Package NVIDIA User-space Libraries & Firmware
+      - name: Download NVIDIA official driver installer
         run: |
-          # 1) NVIDIA .run 패키지 실행 및 추출
+          cd /tmp
+          wget -O NVIDIA-driver.run "https://us.download.nvidia.com/XFree86/Linux-x86_64/${{ github.event.inputs.nvidia_version }}/NVIDIA-Linux-x86_64-${{ github.event.inputs.nvidia_version }}.run"
+          chmod +x NVIDIA-driver.run
+  
+      - name: Extract libraries and firmware from .run
+        run: |
           mkdir -p /tmp/nvidia-extract
           cd /tmp/nvidia-extract
-          ../NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run --extract-only
-          
-          # 2) synopkg 패키지 소스에 라이브러리 복사
+          ../NVIDIA-driver.run --extract-only
+  
+      - name: Copy user-space libraries into package source
+        run: |
           sudo mkdir -p /toolkit/source/nvidia-driver/usr/lib
           sudo cp -v /tmp/nvidia-extract/usr/lib/libnvidia-*.so* /toolkit/source/nvidia-driver/usr/lib/
+          sudo cp -v /tmp/nvidia-extract/usr/lib/libcuda.so* /toolkit/source/nvidia-driver/usr/lib/
+          sudo cp -v /tmp/nvidia-extract/usr/lib/libnvidia-encode.so* /toolkit/source/nvidia-driver/usr/lib/
+          sudo cp -v /tmp/nvidia-extract/usr/lib/libnvcuvid.so* /toolkit/source/nvidia-driver/usr/lib/
+  
+      - name: Copy firmware binaries into package source
+        run: |
           sudo mkdir -p /toolkit/source/nvidia-driver/lib/firmware/nvidia
           sudo cp -v /tmp/nvidia-extract/lib/firmware/nvidia/*.bin /toolkit/source/nvidia-driver/lib/firmware/nvidia/
-          
-          # 3) 패키지 설치 시 DSM 내 올바른 경로로 배치되도록 소스 구조 유지
-
+  
       - name: Create NVIDIA package source structure (INFO FILE)
         run: |
-          set -e
           cd /toolkit/source/nvidia-driver
-
-          # INFO.sh는 chroot 내부에서 ./INFO.sh 로 실행 가능해야 함
-          sudo tee ./INFO.sh << 'EOF'          
+          sudo tee INFO.sh << 'EOF'
           #!/bin/bash
           set -e
-          # pkgscripts include 경로 (DSM7 계열)
+          # pkgscripts include 경로
           if [ -f /pkgscripts-ng/include/pkg_util.sh ]; then
             source /pkgscripts-ng/include/pkg_util.sh
           else
-            # 일부 환경에서 /pkgscripts/include 로도 제공되는 경우가 있어 보조 경로
             source /pkgscripts/include/pkg_util.sh 2>/dev/null || true
           fi
-
           package="nvidia-driver"
-          version="${{ github.event.inputs.version || '1.0.0' }}"
+          version="${{ github.event.inputs.version }}"
           displayname="NVIDIA GPU Driver"
           description="NVIDIA GPU Driver for Synology DSM ${{ matrix.dsm }}"
           arch="x86_64"
           maintainer="PeterSuh-Q3"
-          maintainer_url="https://github.com/PeterSuh-Q3"
           distributor="PeterSuh-Q3"
-          distributor_url="https://github.com/PeterSuh-Q3/syno_nvidia_gpu_driver"
-          support_url="https://github.com/PeterSuh-Q3/syno_nvidia_gpu_driver/issues"
-          helpurl="https://github.com/PeterSuh-Q3/syno_nvidia_gpu_driver#README.md"
           os_min_ver="7.0-40337"
           os_max_ver="7.2-99999"
-          install_dep_packages=""
-          beta="no"
-          thirdparty="yes"
-          startable="no"
-          ctl_stop="yes"
-          ctl_uninstall="yes"
-          support_conf_folder="yes"
-
-          # 스크립트로 직접 실행될 때만 pkg_dump_info 출력
+          files="
+            lib/modules/drivers/nvidia/*.ko
+            usr/lib/libnvidia-*.so*
+            usr/lib/libcuda.so*
+            usr/lib/libnvidia-encode.so*
+            usr/lib/libnvcuvid.so*
+            lib/firmware/nvidia/*.bin
+            etc/modprobe.d/nvidia.conf
+          "
+          # pkg_dump_info 실행
           if [ "${BASH_SOURCE[0]}" = "$0" ]; then
-            # pkg_dump_info가 있으면 사용, 없으면 수동 출력
-            if type pkg_dump_info >/dev/null 2>&1; then
+            if type pkg_dump_info &>/dev/null; then
               pkg_dump_info
-            else
-              cat <<EOT
-          package="${package}"
-          version="${version}"
-          displayname="${displayname}"
-          description="${description}"
-          arch="${arch}"
-          maintainer="${maintainer}"
-          maintainer_url="${maintainer_url}"
-          distributor="${distributor}"
-          distributor_url="${distributor_url}"
-          support_url="${support_url}"
-          helpurl="${helpurl}"
-          os_min_ver="${os_min_ver}"
-          os_max_ver="${os_max_ver}"
-          install_dep_packages="${install_dep_packages}"
-          beta="${beta}"
-          thirdparty="${thirdparty}"
-          startable="${startable}"
-          ctl_stop="${ctl_stop}"
-          ctl_uninstall="${ctl_uninstall}"
-          support_conf_folder="${support_conf_folder}"
-          EOT
             fi
           fi
           EOF
-
-          sudo chmod +x ./INFO.sh
+          sudo chmod +x INFO.sh
+  
+      - name: Copy modprobe config
+        run: |
+          sudo mkdir -p /toolkit/source/nvidia-driver/etc/modprobe.d
+          sudo tee /toolkit/source/nvidia-driver/etc/modprobe.d/nvidia.conf << 'EOF'
+          # NVIDIA driver modules
+          alias char-major-195* nvidia
+          options nvidia NVreg_DeviceFileUID=0 NVreg_DeviceFileGID=0 NVreg_DeviceFileMode=0666
+          EOF
+  
+      - name: Prepare SynoBuildConf scripts
+        run: sudo chmod +x /toolkit/source/nvidia-driver/SynoBuildConf/*
 
       - name: Create SynoBuildConf directory and scripts
         run: |
