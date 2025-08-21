@@ -369,7 +369,10 @@ jobs:
               
               # INFO 파일 생성
               /source/nvidia-driver/INFO.sh > "$PKG_DIR/INFO"
-              
+              echo "$PKG_DIR/INFO"
+              ls -l "$PKG_DIR/INFO"
+              cat "$PKG_DIR/INFO"
+                            
               # 패키지 스크립트들 생성
               
               # start-stop-status 스크립트
