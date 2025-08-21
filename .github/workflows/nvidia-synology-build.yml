@@ -4,6 +4,9 @@
 
 name: Build NVIDIA Driver Package for Synology DSM
 
+env:
+  NVIDIA_VERSION: ${{ inputs.nvidia_version || github.event.inputs.nvidia_version || '535.261.03' }}
+
 on:
   release:
     types: [published]
@@ -163,8 +166,11 @@ jobs:
           if [ ! -f "$GITHUB_WORKSPACE/NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run" ]; then
             echo "Downloading NVIDIA .run to workspace"
             cd "$GITHUB_WORKSPACE"
-            wget -O "NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run" \
-              "https://us.download.nvidia.com/XFree86/Linux-x86_64/${{ inputs.nvidia_version }}/NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run" || true
+            # modules
+            NVIDIA_VER="${NVIDIA_VERSION}"
+            # .run
+            wget -O "NVIDIA-Linux-x86_64-${NVIDIA_VERSION}.run" \
+              "https://us.download.nvidia.com/XFree86/Linux-x86_64/${NVIDIA_VERSION}/NVIDIA-Linux-x86_64-${NVIDIA_VERSION}.run"
           fi
 
           # 1) NVIDIA .run 추출 (워크스페이스 하위)
@@ -307,11 +313,8 @@ jobs:
           export SYSSRC="${KERNEL_SRC}"
           export SYSOUT="${KERNEL_SRC}"
 
-          make modules \
-              KERNEL_UNAME=${KERNEL_UNAME} \
-              SYSSRC=${KERNEL_SRC} \
-              SYSOUT=${KERNEL_SRC} \
-              -j$(nproc)
+          make -C kernel-open modules \
+            KERNEL_UNAME="${KERNEL_UNAME}" SYSSRC="${SYSSRC}" SYSOUT="${SYSOUT}" -j"$(nproc)"
 
           echo "=== Build complete. Generated modules:"
           find . -name "*.ko" -type f || true
