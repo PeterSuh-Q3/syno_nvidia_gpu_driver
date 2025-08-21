@@ -1,0 +1,33 @@
+#!/bin/sh
+case $1 in
+    start)
+        echo "Loading NVIDIA kernel modules..." > $SYNOPKG_TEMP_LOGFILE
+        if [ -d /var/packages/nvidia-driver/target/lib/modules/drivers/nvidia ]; then
+            for module in nvidia-drm nvidia-modeset nvidia; do
+                if [ -f "/var/packages/nvidia-driver/target/lib/modules/drivers/nvidia/${module}.ko" ]; then
+                    insmod "/var/packages/nvidia-driver/target/lib/modules/drivers/nvidia/${module}.ko" 2>/dev/null || true
+                fi
+            done
+        fi
+        if [ -c /dev/nvidia0 ]; then
+            chmod 666 /dev/nvidia*
+        fi
+        echo "NVIDIA driver started" >> $SYNOPKG_TEMP_LOGFILE
+        exit 0
+        ;;
+    stop)
+        echo "Unloading NVIDIA kernel modules..." > $SYNOPKG_TEMP_LOGFILE
+        for module in nvidia nvidia-modeset nvidia-drm; do
+            rmmod $module 2>/dev/null || true
+        done
+        echo "NVIDIA driver stopped" >> $SYNOPKG_TEMP_LOGFILE
+        exit 0
+        ;;
+    status)
+        if lsmod | grep -q nvidia; then
+            exit 0
+        else
+            exit 1
+        fi
+        ;;
+esac
