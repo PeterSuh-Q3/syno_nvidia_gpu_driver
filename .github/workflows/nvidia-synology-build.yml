@@ -152,7 +152,7 @@ jobs:
           version="${{ github.event.inputs.version || '1.0.0' }}"
           displayname="NVIDIA GPU Driver"
           description="NVIDIA GPU Driver for Synology DSM ${{ matrix.dsm }}"
-          arch="${{ matrix.arch }}"
+          arch="x86_64"
           maintainer="PeterSuh-Q3"
           maintainer_url="https://github.com/PeterSuh-Q3"
           distributor="PeterSuh-Q3"
