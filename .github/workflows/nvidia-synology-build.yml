@@ -129,16 +129,52 @@ jobs:
   
       - name: Copy user-space libraries into package source
         run: |
+          set -e
           sudo mkdir -p /toolkit/source/nvidia-driver/usr/lib
-          sudo cp -v /tmp/nvidia-extract/usr/lib/libnvidia-*.so* /toolkit/source/nvidia-driver/usr/lib/
-          sudo cp -v /tmp/nvidia-extract/usr/lib/libcuda.so* /toolkit/source/nvidia-driver/usr/lib/
-          sudo cp -v /tmp/nvidia-extract/usr/lib/libnvidia-encode.so* /toolkit/source/nvidia-driver/usr/lib/
-          sudo cp -v /tmp/nvidia-extract/usr/lib/libnvcuvid.so* /toolkit/source/nvidia-driver/usr/lib/
+      
+          copy_if_exists() {
+            local pattern="$1"
+            local dest="$2"
+            shopt -s nullglob
+            local matches=( $pattern )
+            shopt -u nullglob
+            if [ ${#matches[@]} -gt 0 ]; then
+              echo "Found ${#matches[@]} file(s) for pattern: $pattern"
+              for f in "${matches[@]}"; do
+                sudo cp -v -- "$f" "$dest"/
+              done
+            else
+              echo "Skip: no files matched pattern: $pattern"
+            fi
+          }
+      
+          copy_if_exists "/tmp/nvidia-extract/usr/lib/libnvidia-*.so*"         "/toolkit/source/nvidia-driver/usr/lib"
+          copy_if_exists "/tmp/nvidia-extract/usr/lib/libcuda.so*"             "/toolkit/source/nvidia-driver/usr/lib"
+          copy_if_exists "/tmp/nvidia-extract/usr/lib/libnvidia-encode.so*"    "/toolkit/source/nvidia-driver/usr/lib"
+          copy_if_exists "/tmp/nvidia-extract/usr/lib/libnvcuvid.so*"          "/toolkit/source/nvidia-driver/usr/lib"        
   
       - name: Copy firmware binaries into package source
         run: |
+          set -e        
           sudo mkdir -p /toolkit/source/nvidia-driver/lib/firmware/nvidia
-          sudo cp -v /tmp/nvidia-extract/lib/firmware/nvidia/*.bin /toolkit/source/nvidia-driver/lib/firmware/nvidia/
+          
+          copy_if_exists() {
+            local pattern="$1"
+            local dest="$2"
+            shopt -s nullglob
+            local matches=( $pattern )
+            shopt -u nullglob
+            if [ ${#matches[@]} -gt 0 ]; then
+              echo "Found ${#matches[@]} file(s) for pattern: $pattern"
+              for f in "${matches[@]}"; do
+                sudo cp -v -- "$f" "$dest"/
+              done
+            else
+              echo "Skip: no files matched pattern: $pattern"
+            fi
+          }
+          
+          copy_if_exists "/tmp/nvidia-extract/lib/firmware/nvidia/*.bin" "/toolkit/source/nvidia-driver/lib/firmware/nvidia/"
   
       - name: Create NVIDIA package source structure (INFO FILE)
         run: |
