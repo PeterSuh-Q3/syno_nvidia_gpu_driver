@@ -115,6 +115,21 @@ jobs:
           sudo cp -r /tmp/nvidia-open-modules/* "/toolkit/source/nvidia-driver/"
           echo "NVIDIA modules copied to package source"
 
+      - name: Extract and Package NVIDIA User-space Libraries & Firmware
+        run: |
+          # 1) NVIDIA .run 패키지 실행 및 추출
+          mkdir -p /tmp/nvidia-extract
+          cd /tmp/nvidia-extract
+          ../NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run --extract-only
+          
+          # 2) synopkg 패키지 소스에 라이브러리 복사
+          sudo mkdir -p /toolkit/source/nvidia-driver/usr/lib
+          sudo cp -v /tmp/nvidia-extract/usr/lib/libnvidia-*.so* /toolkit/source/nvidia-driver/usr/lib/
+          sudo mkdir -p /toolkit/source/nvidia-driver/lib/firmware/nvidia
+          sudo cp -v /tmp/nvidia-extract/lib/firmware/nvidia/*.bin /toolkit/source/nvidia-driver/lib/firmware/nvidia/
+          
+          # 3) 패키지 설치 시 DSM 내 올바른 경로로 배치되도록 소스 구조 유지
+
       - name: Create NVIDIA package source structure (INFO FILE)
         run: |
           set -e
