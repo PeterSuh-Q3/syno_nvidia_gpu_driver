@@ -1,8 +1,0 @@
-#!/bin/sh
-for module in nvidia nvidia-modeset nvidia-drm; do
-    rmmod $module 2>/dev/null || true
-done
-rm -f /lib/modules/$(uname -r)/kernel/drivers/nvidia/*.ko 2>/dev/null || true
-rm -f /etc/modprobe.d/nvidia.conf 2>/dev/null || true
-depmod -a || true
-exit 0
