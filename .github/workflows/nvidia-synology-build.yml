@@ -49,10 +49,6 @@ jobs:
             kmod \
             libc6-i386
 
-      # 캐시 미스 시에만 실행
-      - name: Create toolkit directory structure
-        uses: actions/cache@v4
-          
       - name: Deploy Synology build environment
         run: |
           sudo mkdir -p /toolkit
