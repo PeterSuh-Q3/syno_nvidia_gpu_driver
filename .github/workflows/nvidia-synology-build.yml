@@ -448,10 +448,10 @@ jobs:
             if [ -d "$spk_dir" ]; then
               cd "$spk_dir"
               ls -l *.spk
-              rm -f *_debug.spk || true
+              sudo rm -f *_debug.spk || true
               for f in *.spk; do
                 [ -f "$f" ] || continue
-                mv "$f" "${f%.spk}-${{ matrix.arch }}-${{ matrix.dsm }}.spk"
+                sudo mv "$f" "${f%.spk}-${{ matrix.arch }}-${{ matrix.dsm }}.spk"
               done
               ls -l *.spk
               cd ..
