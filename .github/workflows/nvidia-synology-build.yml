@@ -49,16 +49,18 @@ jobs:
             kmod \
             libc6-i386
 
-      - name: Deploy Synology build environment
+      - name: Create toolkit directory structure
         run: |
           sudo mkdir -p /toolkit
           cd /toolkit
           sudo git clone https://github.com/SynologyOpenSource/pkgscripts-ng
           cd pkgscripts-ng
           sudo git checkout DSM${{ matrix.dsm }}
+          
+      - name: Deploy Synology build environment
+        run: |
           cd /toolkit/pkgscripts-ng
           sudo ./EnvDeploy -v ${{ matrix.dsm }} -p ${{ matrix.arch }}
-          ls -l /toolkit/pkgscripts-ng/include
 
       - name: Download Synology GPL kernel source and toolchain
         run: |
