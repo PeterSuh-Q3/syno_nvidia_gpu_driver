@@ -82,18 +82,7 @@ jobs:
           sudo mkdir -p "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/kernel"
           sudo tar -xf "linux-${KERNEL_VER}.txz" -C "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/kernel" --strip-components=1
 
-      - name: Cache NVIDIA open-source kernel modules
-        uses: actions/cache@v4
-        id: cache-nvidia-modules
-        with:
-          path: /tmp/nvidia-open-modules
-          key: nvidia-modules-${{ github.event.inputs.nvidia_version || '535.261.03' }}-${{ runner.os }}-${{ hashFiles('.github/workflows/*.yml') }}
-          restore-keys: |
-            nvidia-modules-${{ github.event.inputs.nvidia_version || '535.261.03' }}-${{ runner.os }}-
-            nvidia-modules-${{ github.event.inputs.nvidia_version || '535.261.03' }}-
-
       - name: Download NVIDIA open-source kernel modules
-        if: steps.cache-nvidia-modules.outputs.cache-hit != 'true'
         run: |
           set -e
           cd /tmp
@@ -117,12 +106,7 @@ jobs:
 
       - name: Verify NVIDIA modules availability
         run: |
-          if [ "${{ steps.cache-nvidia-modules.outputs.cache-hit }}" == "true" ]; then
-            echo "✅ Used cached NVIDIA modules"
-          else
-            echo "🔄 Fresh modules downloaded"
-          fi
-          echo "NVIDIA modules ready:"
+          echo "NVIDIA modules ready (no cache used):"
           find /tmp/nvidia-open-modules -name "Makefile" | head -5
 
       - name: Copy NVIDIA modules to package source
