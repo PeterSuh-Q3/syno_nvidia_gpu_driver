@@ -337,9 +337,10 @@ jobs:
               cp -av PACKAGE_ICON*.PNG $PKG_DIR/ 2>/dev/null || true
 
               # INFO 파일 생성
-              /toolkit/source/nvidia-driver/INFO.sh > "/tmp/INFO"
-              ls -l "/tmp/INFO" || true
-              sudo cp -vf "/tmp/INFO" "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
+              /toolkit/source/nvidia-driver/INFO.sh > "./INFO"
+              cp -vf "./INFO" "${PKG_DIR}/INFO"
+              sudo cp -vf "./INFO" "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
+              sudo ls -l "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO" || true
                             
               # 패키지 스크립트들 생성
               
