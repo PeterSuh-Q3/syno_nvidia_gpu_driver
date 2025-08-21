@@ -50,13 +50,38 @@ jobs:
             libc6-i386 \
             tree
 
-      - name: Create toolkit directory structure
+      - name: Cache pkgscripts-ng
+        uses: actions/cache@v4
+        id: cache-pkgscripts
+        with:
+          path: pkgscripts-ng                      # 워크스페이스 내부
+          key: pkgscripts-ng-${{ runner.os }}-${{ matrix.dsm }}-${{ hashFiles('.github/workflows/*.yml') }}
+          restore-keys: |
+            pkgscripts-ng-${{ runner.os }}-${{ matrix.dsm }}-
+            pkgscripts-ng-${{ runner.os }}-
+
+      - name: Prepare pkgscripts-ng in workspace
         run: |
-          sudo mkdir -p /toolkit
-          cd /toolkit
-          sudo git clone https://github.com/SynologyOpenSource/pkgscripts-ng
+          set -e
+          mkdir -p "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE"
+          if [ "${{ steps.cache-pkgscripts.outputs.cache-hit }}" = "true" ]; then
+            echo "✅ Using cached pkgscripts-ng"
+          else
+            echo "🔄 Cloning pkgscripts-ng"
+            git clone https://github.com/SynologyOpenSource/pkgscripts-ng pkgscripts-ng
+          fi
           cd pkgscripts-ng
-          sudo git checkout DSM${{ matrix.dsm }}
+          # 원하는 브랜치/태그로 체크아웃(매트릭스 dsm 반영)
+          git fetch --all --tags --prune
+          git checkout "DSM${{ matrix.dsm }}" || git checkout -B "DSM${{ matrix.dsm }}" "origin/DSM${{ matrix.dsm }}"
+
+          # /toolkit 경로와 호환되도록 심볼릭 링크 구성
+          sudo mkdir -p /toolkit
+          if [ -L /toolkit/pkgscripts-ng ] || [ -d /toolkit/pkgscripts-ng ]; then
+            sudo rm -rf /toolkit/pkgscripts-ng
+          fi
+          sudo ln -s "$GITHUB_WORKSPACE/pkgscripts-ng" /toolkit/pkgscripts-ng
 
       - name: Deploy Synology build environment
         run: |
@@ -116,6 +141,7 @@ jobs:
 
       - name: Verify NVIDIA modules availability
         run: |
+          cd "$GITHUB_WORKSPACE"
           if [ "${{ steps.cache-nvidia-modules.outputs.cache-hit }}" == "true" ]; then
             echo "✅ Used cached NVIDIA modules"
           else
@@ -132,14 +158,29 @@ jobs:
 
       - name: Extract and Package NVIDIA User-space Libraries & Firmware
         run: |
+          set -e
+          # 0) .run 파일이 워크스페이스에 없으면 다운로드(필요 시)
+          if [ ! -f "$GITHUB_WORKSPACE/NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run" ]; then
+            echo "Downloading NVIDIA .run to workspace"
+            cd "$GITHUB_WORKSPACE"
+            wget -O "NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run" \
+              "https://us.download.nvidia.com/XFree86/Linux-x86_64/${{ inputs.nvidia_version }}/NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run" || true
+          fi
+
+          # 1) NVIDIA .run 추출 (워크스페이스 하위)
           WORK_DIR="$GITHUB_WORKSPACE/nvidia-extract"
           mkdir -p "$WORK_DIR"
           cd "$WORK_DIR"
+          chmod +x "$GITHUB_WORKSPACE/NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run"
           "$GITHUB_WORKSPACE/NVIDIA-Linux-x86_64-${{ inputs.nvidia_version }}.run" --extract-only
+
+          # 2) synopkg 패키지 소스에 라이브러리/펌웨어 복사
           sudo mkdir -p /toolkit/source/nvidia-driver/usr/lib
-          sudo cp -v "$WORK_DIR/usr/lib/libnvidia-.so" /toolkit/source/nvidia-driver/usr/lib/
+          sudo cp -v "$WORK_DIR/usr/lib/libnvidia-"*.so* /toolkit/source/nvidia-driver/usr/lib/ || true
           sudo mkdir -p /toolkit/source/nvidia-driver/lib/firmware/nvidia
-          sudo cp -v "$WORK_DIR/lib/firmware/nvidia/"*.bin /toolkit/source/nvidia-driver/lib/firmware/nvidia/
+          sudo cp -v "$WORK_DIR/lib/firmware/nvidia/"*.bin /toolkit/source/nvidia-driver/lib/firmware/nvidia/ || true
+
+          # 3) 소스 트리 구조 유지
 
       - name: Create NVIDIA package source structure (INFO FILE)
         run: |
