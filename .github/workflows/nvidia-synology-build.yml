@@ -338,7 +338,7 @@ jobs:
               cp -av PACKAGE_ICON*.PNG $PKG_DIR/ 2>/dev/null || true
               
               # INFO 파일 생성
-              sudo /source/nvidia-driver/INFO.sh > "$PKG_DIR/INFO"
+              /source/nvidia-driver/INFO.sh > "$PKG_DIR/INFO"
                             
               # 패키지 스크립트들 생성
               
