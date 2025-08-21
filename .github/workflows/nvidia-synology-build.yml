@@ -223,9 +223,6 @@ jobs:
           alias char-major-195* nvidia
           options nvidia NVreg_DeviceFileUID=0 NVreg_DeviceFileGID=0 NVreg_DeviceFileMode=0666
           EOF
-  
-      - name: Prepare SynoBuildConf scripts
-        run: sudo chmod +x /toolkit/source/nvidia-driver/SynoBuildConf/*
 
       - name: Create SynoBuildConf directory and scripts
         run: |
