@@ -345,7 +345,7 @@ jobs:
               ls -l "$PKG_DIR/INFO"
               cat "$PKG_DIR/INFO"
 
-              cp -av "$PKG_DIR/INFO" "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO" 2>/dev/null || true
+              sudo cp -av "$PKG_DIR/INFO" "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO" 2>/dev/null || true
 
               echo "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
               ls -l "/toolkit/build_env/ds.${{ matrix.arch }}-${{ matrix.dsm }}/source/nvidia-driver/INFO"
